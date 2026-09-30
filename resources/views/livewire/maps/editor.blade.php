@@ -1,0 +1,129 @@
+<div wire:ignore class="{{ $map->canEdit(auth()->user()) ? '' : 'map-read-only' }}">
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Map tools">
+        <div class="brand"><span class="brand-mark">✥</span><span><strong>MapMaker <em>3000</em></strong><small>THE ATLAS FORGE</small></span></div>
+        <div class="sidebar-scroll">
+          <div class="section-heading"><span>CAMPAIGN ATLAS</span><button id="rename-board" class="icon-button" title="Rename this map" aria-label="Rename this map">✎</button></div>
+          <div id="board-tree" class="board-tree"></div>
+          <button id="village-example" class="secondary-button wide" type="button">Explore Brackenford</button>
+          <p class="example-caption">A village, a tavern, and a campaign to build. Adds the example to your atlas.</p>
+          <div class="section-heading palette-heading"><span>MAP ELEMENTS</span><small>Drag or click</small></div>
+          <div id="palette" class="palette"></div>
+          <div class="section-heading route-heading"><span>CONNECTIONS</span></div>
+          <button id="connect-places" class="connect-button" type="button">⌁ Connect places</button>
+          <p id="connect-instructions" class="connect-instructions">Draw roads, trails, rivers, and sea routes between places on the same map.</p>
+          <div class="help-card"><span class="help-icon">✥</span><strong>Follow the map</strong><p>Scroll smoothly for more detail. Drag sideways to explore neighboring lands at the same scale.</p></div>
+        </div>
+        <div class="sidebar-footer"><span class="save-dot"></span><span id="save-status">Saved in this browser</span></div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div class="breadcrumbs" id="breadcrumbs"></div>
+          <div class="top-actions">
+            <a href="{{ route('maps.index') }}" class="text-button">My maps</a>
+            @if ($map->canManage(auth()->user()))
+              <button id="access-button" class="text-button" type="button">Share & access</button>
+            @endif
+            <button id="new-atlas-button" class="text-button" title="Start a new example atlas">New atlas</button>
+            <button id="export-button" class="text-button" title="Download your atlas as JSON">Export</button>
+            <button id="import-button" class="text-button" title="Load a previously exported atlas">Import</button>
+            <button id="undo-button" class="text-button" disabled title="Undo (Ctrl/Cmd+Z)">Undo</button>
+            <button id="redo-button" class="text-button" disabled title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
+            <button id="upgrade-atlas" class="text-button" hidden>Upgrade atlas format</button>
+            <input id="import-input" type="file" accept=".json,application/json" hidden />
+            <span class="top-divider"></span>
+            <button id="help-button" class="icon-button help-button" title="How to use the editor" aria-label="How to use the editor">?</button>
+          </div>
+        </header>
+
+        <div class="map-header">
+          <div><div class="eyebrow" id="map-kind">WORLD MAP</div><h1 id="map-title">The Shattered Realm</h1><p id="map-subtitle">Scroll for more detail. Drag to explore neighboring lands.</p></div>
+          <div class="map-header-actions"><label id="show-territories-field" hidden><input id="show-territories" type="checkbox" checked /> Borders</label><button id="edit-territories" class="secondary-button" hidden aria-pressed="false">Edit borders</button><button id="edit-biomes" class="secondary-button" hidden aria-pressed="false">Edit biomes</button><button id="generate-details" class="secondary-button" hidden>✦ Generate town</button><button id="add-place" class="primary-button">＋ Add to map</button></div>
+        </div>
+
+        <div class="canvas-wrap" id="canvas-wrap">
+          <div id="map-canvas" class="map-canvas" aria-label="Interactive map canvas">
+            <div id="terrain-layer" class="terrain-layer"></div>
+            <svg id="routes-layer" class="routes-layer" aria-label="Map routes"></svg>
+            <div id="places-layer" class="places-layer"></div>
+          </div>
+          <div id="empty-hint" class="empty-hint" hidden><span>✧</span><strong>This map is waiting for a story</strong><p>Choose a place from the left, then click anywhere to add it.</p></div>
+          <div class="canvas-tip">✥ Drag to pan <span>·</span> Scroll to change detail <span>·</span> Pan across neighboring places</div>
+          <div class="zoom-controls"><button id="zoom-out" aria-label="Zoom out">−</button><span id="zoom-label">100%</span><button id="zoom-in" aria-label="Zoom in">＋</button><button id="zoom-reset" class="reset-button" title="Reset view" aria-label="Reset view">⌖</button></div>
+        </div>
+      </main>
+
+      <aside class="inspector" id="inspector" aria-label="Map details">
+        <div class="inspector-header"><div><span class="eyebrow" id="inspector-kind">PLACE DETAILS</span><h2 id="inspector-heading">Select a place</h2></div><button id="close-inspector" class="icon-button" aria-label="Close details">×</button></div>
+        <div id="inspector-empty" class="inspector-empty"><div class="inspector-empty-art">✥</div><strong>Chronicle the realm</strong><p>Select a place to give it a name, record its lore, and chart what lies within.</p></div>
+        <div id="inspector-form" class="inspector-form" hidden>
+          <label>NAME<input id="place-name" type="text" maxlength="80" placeholder="Name this place" /></label>
+          <label>KIND<select id="place-type"></select></label>
+          <label id="keep-place-field" class="check-label" hidden><input id="keep-place" type="checkbox" /> Keep this place when regenerating</label>
+          <div id="realm-options" hidden>
+            <label>LANDSCAPE<select id="realm-biome"><option value="forest">Forest</option><option value="plains">Green plains</option><option value="highland">Highlands</option><option value="snow">Snowy mountains</option><option value="desert">Desert</option><option value="marsh">Marshland</option><option value="coast">Coastal</option><option value="mixed">Mixed</option></select></label>
+            <label class="check-label"><input id="realm-island" type="checkbox" /> Separate island</label>
+          </div>
+          <button id="review-session-text" class="secondary-button" type="button">Review session text</button><div class="inspector-hint" id="place-environment" aria-live="polite"></div><label>DESCRIPTION<textarea id="place-description" rows="3" placeholder="What makes this place memorable?"></textarea></label>
+          <label>SESSION NOTES<textarea id="place-notes" rows="5" placeholder="What happened here? Secrets, NPCs, discoveries..."></textarea></label>
+          <div class="inspector-hint">Session notes live with this place. A future recording importer can suggest new notes and map changes for your review.</div>
+          <button id="enter-place" class="primary-button wide">Explore inside ↗</button>
+          <section class="events-section" aria-label="Campaign events">
+            <h3>Campaign events</h3>
+            <div id="place-events"></div>
+            <details><summary>＋ Pin an event here</summary>
+              <label>EVENT TITLE<input id="event-title" maxlength="120" placeholder="A discovery at the tavern" /></label>
+              <label>SESSION<input id="event-session" maxlength="80" placeholder="Session 1" /></label>
+              <label>WHAT HAPPENED<textarea id="event-detail" rows="3" placeholder="Record what your party discovered…"></textarea></label>
+              <button id="event-add" class="secondary-button wide" type="button">Pin event</button>
+            </details>
+          </section>
+          <button id="delete-place" class="danger-button wide">Delete place</button>
+        </div>
+        <div id="route-form" class="inspector-form" hidden>
+          <label>NAME<input id="route-name" type="text" maxlength="80" placeholder="Name this route" /></label>
+          <label>KIND<select id="route-type"><option value="road">Road</option><option value="trail">Trail</option><option value="river">River</option><option value="sea">Sea route</option><option value="passage">Passage</option></select></label>
+          <label>DESCRIPTION<textarea id="route-description" rows="3" placeholder="What is the journey like?"></textarea></label>
+          <label>SESSION NOTES<textarea id="route-notes" rows="4" placeholder="Encounters, discoveries, and travel notes..."></textarea></label>
+          <button id="delete-route" class="danger-button wide">Delete connection</button>
+        </div>
+      </aside>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <dialog id="help-dialog"><div class="dialog-top"><span class="eyebrow">CARTOGRAPHER'S GUIDE</span><button id="help-close" class="icon-button" aria-label="Close help">×</button></div><h2>Explore the atlas.</h2><p>Scroll to move smoothly between world, realm, province, and settlement detail. The same detail level opens across the whole atlas, so drag sideways to explore neighboring places. Scroll out to reverse the journey. Double-click a place or use the atlas list to fly there.</p><p>On the world map, realms join one continuous mainland. Select a realm to choose its landscape or mark it as a separate island. Drag a realm to reshape the shared coast, or choose Generate world to preview another seed. Your atlas saves in this browser; export a JSON backup to keep or transfer it.</p><button id="help-done" class="primary-button">Return to atlas</button></dialog>
+    <dialog id="generator-dialog"><div class="dialog-top"><span class="eyebrow">ATLAS GENERATOR</span><button id="generator-close" class="icon-button" aria-label="Close generator">×</button></div><h2 id="generator-title">Generate details</h2><p id="generator-intro"></p><label class="generator-field">SEED<input id="generator-seed" type="text" maxlength="60" placeholder="A word or phrase" /></label><div id="generator-world-options" hidden><label class="generator-field">WORLD GENERATOR<select id="generator-world-mode"><option value="legacy-realms">Existing realm-based terrain</option><option value="independent">Independent continent</option></select></label><div id="continent-settings" hidden><label id="continent-keep-field" class="generator-check"><input id="continent-keep" type="checkbox" /> Keep existing coastline</label><label class="generator-field">OUTLINE<select id="continent-preset"><option value="broad">Broad continent</option><option value="fragmented">Bays and peninsulas</option><option value="north-south">Long north–south</option><option value="island-heavy">Island-heavy continent</option></select></label><label class="generator-field">WIDTH<input id="continent-width" type="number" min="200" max="1000000" /></label><label class="generator-field">HEIGHT<input id="continent-height" type="number" min="200" max="1000000" /></label><label class="generator-field">CENTER X<input id="continent-centerX" type="number" /></label><label class="generator-field">CENTER Y<input id="continent-centerY" type="number" /></label><label class="generator-field">CONTINENTAL SEPARATION<input id="continent-drift" type="number" min="0" max="1" step="0.1" /></label><label class="generator-field">EROSION<input id="continent-erosion" type="number" min="0" max="1" step="0.1" /></label><label class="generator-field">COAST ROUGHNESS<input id="continent-roughness" type="number" min="0" max="1" step="0.1" /></label></div></div><label id="generator-decoration-field" class="generator-field">VEGETATION SEED<input id="generator-decoration-seed" type="text" maxlength="60" placeholder="Leave blank to use the main seed" /></label><label id="generator-size-field" class="generator-field">SIZE<select id="generator-size"><option value="small">Small</option><option value="standard" selected>Standard</option><option value="large">Large</option></select></label><div id="generator-geography-options"><label class="generator-field">VILLAGE TYPE<select id="generator-village-type"><option value="river">River village</option><option value="crossroads">Crossroads village</option><option value="coastal">Coastal village</option></select></label><label class="generator-check"><input id="generator-keep-geography" type="checkbox" checked /> Keep established geography</label><p class="geography-hint">Keeps roads, water, bridges and public spaces. Uncheck to change the landscape or road layout. Use Keep this place in the inspector to protect individual locations.</p></div><div id="generator-map-preview" class="generator-map-preview" role="img" aria-label="Preview of generated map"></div><p id="generator-preview" class="generator-preview"></p><div class="generator-actions"><button id="generator-reroll" class="text-button">↻ New seed</button><span class="generator-actions-spacer"></span><button id="generator-cancel" class="text-button">Cancel</button><button id="generator-apply" class="primary-button">Add to atlas</button></div></dialog>
+    <dialog id="upgrade-dialog" aria-labelledby="upgrade-title"><h2 id="upgrade-title">Preview atlas format upgrade</h2><p id="upgrade-summary"></p><p>This upgrades the saved format to version 2. Older versions of MapMaker cannot open version 2 exports. Export your current atlas first if you need an older-format copy.</p><div class="generator-actions"><button id="upgrade-cancel" class="text-button">Cancel</button><button id="upgrade-apply" class="primary-button">Upgrade format</button></div></dialog>
+  @if ($map->canManage(auth()->user()))
+    <dialog id="access-dialog" class="access-dialog">
+      <div class="dialog-top"><span class="eyebrow">MAP ACCESS</span><button id="access-close" class="icon-button" type="button" aria-label="Close sharing">×</button></div>
+      <h2>Invite a cartographer</h2>
+      <p>Choose whether they can edit this atlas or only view it. The generated link is bound to their email address.</p>
+      <form method="POST" action="{{ route('maps.invite', $map) }}" class="access-form">
+        @csrf
+        <label>EMAIL<input name="email" type="email" required placeholder="friend@example.com" /></label>
+        <label>RIGHTS<select name="role"><option value="map-editor">Can edit</option><option value="map-viewer">Can view</option></select></label>
+        <button class="primary-button" type="submit">Create invitation</button>
+      </form>
+      @if (session('invite_link'))
+        <div class="invite-result"><strong>Invitation ready</strong><input readonly value="{{ session('invite_link') }}" onclick="this.select()" /><small>Copy and send this link to the invited person.</small></div>
+      @endif
+      <section class="access-list"><h3>Pending invitations</h3>
+        @forelse ($map->invitations()->latest()->get() as $invitation)
+          <p><strong>{{ $invitation->email }}</strong><span>{{ $invitation->role === 'map-editor' ? 'Can edit' : 'Can view' }} · {{ $invitation->accepted_at ? 'Accepted' : 'Pending' }}</span></p>
+        @empty <p class="access-empty">No invitations yet.</p> @endforelse
+      </section>
+    </dialog>
+  @endif
+</div>
+<script>
+  window.mapmakerConfig = {
+    atlas: {{ \Illuminate\Support\Js::from($map->atlas) }},
+    canEdit: {{ \Illuminate\Support\Js::from($map->canEdit(auth()->user())) }},
+    saveUrl: {{ \Illuminate\Support\Js::from(route('maps.save', $map)) }},
+    csrfToken: {{ \Illuminate\Support\Js::from(csrf_token()) }},
+  };
+  document.querySelector('#access-button')?.addEventListener('click', () => document.querySelector('#access-dialog')?.showModal());
+  document.querySelector('#access-close')?.addEventListener('click', () => document.querySelector('#access-dialog')?.close());
+</script>
+<script type="module" src="{{ asset('editor/src/app.js') }}"></script>
