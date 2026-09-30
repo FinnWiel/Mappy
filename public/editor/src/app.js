@@ -63,7 +63,20 @@ const els = {
   generatorPreview: $('#generator-preview'), generatorMapPreview: $('#generator-map-preview'), generatorApply: $('#generator-apply'),
 };
 
-function id() { return crypto.randomUUID(); }
+function id() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  return `map-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+}
 function makeBoard(name, kind, parentPlaceId = null) {
   const result = { id: id(), name, kind, parentPlaceId, placeIds: [] };
   if (kind === 'town' || kind === 'village') result.baseMap = generateTownBase(kind, name, 'standard');
@@ -988,7 +1001,7 @@ els.generateButton.addEventListener('click', () => {
   $('#generator-geography-options').hidden = board().kind !== 'village';
   $('#generator-village-type').value = villageType(board().baseMap);
   $('#generator-keep-geography').checked = board().keepGeography !== false;
-  els.generatorSeed.value = crypto.randomUUID().slice(0, 8);
+  els.generatorSeed.value = id().slice(0, 8);
   els.generatorSize.value = 'standard';
   updateGeneratorPreview(); els.generatorDialog.showModal(); els.generatorSeed.focus();
 });
@@ -1008,7 +1021,7 @@ $('#generator-keep-geography').addEventListener('change', () => {
   if ($('#generator-keep-geography').checked) $('#generator-village-type').value = villageType(atlas.boards[generatorBoardId]?.baseMap);
   updateGeneratorPreview();
 });
-$('#generator-reroll').addEventListener('click', () => { els.generatorSeed.value = crypto.randomUUID().slice(0, 8); updateGeneratorPreview(); });
+$('#generator-reroll').addEventListener('click', () => { els.generatorSeed.value = id().slice(0, 8); updateGeneratorPreview(); });
 $('#generator-close').addEventListener('click', () => els.generatorDialog.close());
 $('#generator-cancel').addEventListener('click', () => els.generatorDialog.close());
 els.generatorDialog.addEventListener('close', () => {
