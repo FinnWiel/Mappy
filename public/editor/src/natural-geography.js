@@ -1,5 +1,6 @@
 import { forestSvg } from './forest-renderer.js';
 import { seedStream } from './seeds.js';
+import { sampleTerrainHeight, terrainElevation } from './terrain-heightmap.js';
 import { contourField } from './landmass.js';
 import { prepareBiomes, displayedBiomes, simplifyLine, simplifyRing } from './smooth-regions.js';
 
@@ -47,7 +48,7 @@ function regions(mask,nx,ny,step,x,y,type,seed) {
   return result.map(({points,holes},i)=>({id:`natural-${type}-${i}`,type,points,holes,editState:'generated',protected:false,provenance:{kind:'generator',seed,generatorVersion:'natural-1'}}));
 }
 
-export function generateNaturalGeography(world,seed=world.seed) {
+export function generateNaturalGeography(world,seed=world.seed,options={}) {
   const coasts=Object.values(world.geography).filter(g=>g.type==='coastline').map(g=>g.points);
   let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
   for(const ring of coasts)for(const [x,y]of ring){left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}
@@ -63,6 +64,7 @@ export function generateNaturalGeography(world,seed=world.seed) {
     const ridge=Math.exp(-(((u-(.4+Math.sin(v*5+phase[0])*.16))/.065)**2));
     const second=Math.exp(-(((v-(.65+Math.sin(u*5+phase[1])*.12))/.07)**2));
     elevation[i]=land[i]?round(90+ridge*1800+second*900+170*(Math.sin(u*16+phase[2])*Math.cos(v*13+phase[3])+1)):0;
+    if(world.terrainHeightmap) elevation[i]=land[i]?round(terrainElevation(sampleTerrainHeight(world.terrainHeightmap,world.settings,x,y))):0;
     temperature[i]=round(28-Math.abs(70-v*95)*.55-elevation[i]*.0065);
     const west=i%nx>0?elevation[i-1]:0;
     rainfall[i]=round(clamp(850+600*Math.sin(v*5+phase[4])+240*Math.cos(u*6+phase[5])+(elevation[i]-west)*1.8,100,2400));
@@ -82,7 +84,7 @@ export function generateNaturalGeography(world,seed=world.seed) {
   const lake=land.map((v,i)=>Number(v&&drainage.filled[i]-elevation[i]>35));
   const riverThreshold=Math.max(12,land.reduce((a,b)=>a+b,0)/100);
   const river=land.map((v,i)=>Number(v&&flow[i]>riverThreshold));
-  const types=land.map((v,i)=>{
+  const types=options.biomes===false?[]:land.map((v,i)=>{
     if(!v||lake[i])return 'water';
     const x=i%nx,y=Math.floor(i/nx);
     let wet=false;
@@ -109,7 +111,8 @@ export function generateNaturalGeography(world,seed=world.seed) {
     const id=`natural-river-${i}`;
     geography[id]={id,type:'river',points:cells.map(point),width:step*clamp(Math.sqrt(flow[i])*.045,.12,.6),cells,editState:'generated',protected:false,provenance:{kind:'generator',seed,generatorVersion:'natural-1'}};
   }
-  for(const type of Object.keys(BIOME_COLORS)) for(const item of regions(types.map(t=>t===type),nx,ny,step,left,top,type,seed)) biomes[item.id]={...item,priority:0};
+  if(options.biomes!==false)for(const type of Object.keys(BIOME_COLORS)) for(const item of regions(types.map(t=>t===type),nx,ny,step,left,top,type,seed)) biomes[item.id]={...item,priority:0};
+  if(world.terrainHeightmap)for(const item of [...Object.values(geography),...Object.values(biomes)])item.provenance.generatorVersion='natural-azgaar-heightmap-1';
   return {geography,biomes:prepareBiomes(biomes,step),fields:{version:1,seed,nx,ny,step,x:left,y:top,land,elevation,temperature,rainfall,filled:drainage.filled.map(round),downstream:drainage.downstream}};
 }
 
@@ -123,7 +126,7 @@ export function naturalSvg(world) {
     return d+(closed?'Z':`T${points.at(-1).map(round).join(' ')}`);
   };
   const polygon=item=>[path(item.points),...(item.holes||[]).map(r=>path(r))].join('');
-  const step=world.fields?.step||10,biomes=Object.values(displayedBiomes(world)).sort((a,b)=>a.priority-b.priority||a.id.localeCompare(b.id));
+  const step=world.fields?.step||10,biomes=world.showBiomes===false?[]:Object.values(displayedBiomes(world)).sort((a,b)=>a.priority-b.priority||a.id.localeCompare(b.id));
   let hash=2166136261;for(const c of JSON.stringify([world.seed,world.fields?.seed,biomes]))hash=Math.imul(hash^c.charCodeAt(0),16777619);
   const filter=`biome-blend-${(hash>>>0).toString(36)}`;
   const fills=biomes.filter(item=>item.type!=='forest').map(item=>`<path d="${polygon(item)}" fill="${BIOME_COLORS[item.type]||BIOME_COLORS.grassland}" fill-rule="evenodd"/>`).join('');
@@ -139,11 +142,11 @@ export function naturalSvg(world) {
       const x=round(f.x+(gx+(random()-.5)*.5)*step),y=round(f.y+(gy+(random()-.5)*.5)*step),s=step*.65;
       if(Object.values(world.geography).some(g=>g.type==='lake'&&containsPolygon(g.points,x,y)))continue;
       const biome=[...biomes].reverse().find(b=>containsPolygon(b.points,x,y)&&!(b.holes||[]).some(h=>containsPolygon(h,x,y)))?.type;
-      if(f.elevation[cell]>1200&&i%2===0) {const m=s*2;svg+=`<path d="M${round(x-m)} ${round(y+m*.4)}L${x} ${round(y-m)}L${round(x+m)} ${round(y+m*.4)}L${round(x+m*.15)} ${round(y+m*.05)}L${round(x-m*.1)} ${round(y-m*.5)}L${round(x-m*.3)} ${round(y+m*.3)}Z" fill="#d6d4b8" stroke="#666d57" stroke-width="${round(step*.085)}" stroke-linejoin="round"/>`;}
+      if(world.showPhysical!==false&&f.elevation[cell]>1200&&i%2===0) {const m=s*2;svg+=`<path d="M${round(x-m)} ${round(y+m*.4)}L${x} ${round(y-m)}L${round(x+m)} ${round(y+m*.4)}L${round(x+m*.15)} ${round(y+m*.05)}L${round(x-m*.1)} ${round(y-m*.5)}L${round(x-m*.3)} ${round(y+m*.3)}Z" fill="#d6d4b8" stroke="#666d57" stroke-width="${round(step*.085)}" stroke-linejoin="round"/>`;}
       else if(biome==='wetland')svg+=`<path d="M${round(x-s*.5)} ${y}h${round(s)}M${x} ${y}v${round(-s*.5)}m0 ${round(s*.35)}l${round(s*.2)} ${round(-s*.4)}" stroke="#5c785d" fill="none" stroke-width="${round(step*.06)}" opacity=".65"/>`;
     }
   }
-  for(const item of Object.values(world.geography))if(item.type==='river')svg+=`<path d="${curved(simplifyLine(item.points,step*.75))}" fill="none" stroke="#6b9aab" stroke-width="${item.width}" stroke-linecap="round" stroke-linejoin="round"/>`;
-  for(const item of Object.values(world.geography))if(item.type==='lake')svg+=`<path d="${[item.points,...(item.holes||[])].map(r=>curved(simplifyRing(r,step*.65),true)).join('')}" fill="#8babb2" fill-rule="evenodd" stroke="#658792" stroke-width="1"/>`;
+  if(world.showPhysical!==false)for(const item of Object.values(world.geography))if(item.type==='river')svg+=`<path d="${curved(simplifyLine(item.points,step*.75))}" fill="none" stroke="#6b9aab" stroke-width="${item.width}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  if(world.showPhysical!==false)for(const item of Object.values(world.geography))if(item.type==='lake')svg+=`<path d="${[item.points,...(item.holes||[])].map(r=>curved(simplifyRing(r,step*.65),true)).join('')}" fill="#8babb2" fill-rule="evenodd" stroke="#658792" stroke-width="1"/>`;
   return svg;
 }

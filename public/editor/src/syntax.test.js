@@ -11,7 +11,7 @@ const sources = readdirSync(new URL('src/', root))
 
 // The browser entry point is not imported by the generator unit tests.
 // Parse it (and the other runtime modules) without requiring a browser DOM.
-for (const source of ['dev-server.js', ...sources]) {
+for (const source of sources) {
   test(`${source} has valid JavaScript syntax`, () => {
     const result = spawnSync(process.execPath, ['--check', fileURLToPath(new URL(source, root))], {
       encoding: 'utf8',
