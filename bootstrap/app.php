@@ -12,7 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $isAtlasSave = fn (Request $request): bool => $request->isMethod('PUT') && $request->is('maps/*/atlas');
+        $middleware->trimStrings(except: [$isAtlasSave]);
+        $middleware->convertEmptyStringsToNull(except: [$isAtlasSave]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

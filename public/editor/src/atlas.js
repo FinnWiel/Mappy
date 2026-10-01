@@ -1,4 +1,5 @@
 import { cardSize } from './geometry.js';
+import { validateSessionRecords } from './session-records.js';
 import { validateContinentSettings } from './continent.js';
 import { validateBiomePolygon } from './biome-editor.js';
 import { validateTownBase, nearestTownFootprint } from './town-base.js';
@@ -76,8 +77,12 @@ function validateLayers(atlas) {
   for (const [id, world] of Object.entries(atlas.worlds)) {
     if (atlas.boards[id]?.kind !== 'world' || world?.id !== id || !['legacy-realms','independent'].includes(world.mode)) throw new Error('Invalid world reference or unsupported generation mode');
     if(world.mode==='independent') {
-      if(world.generator?.name!=='continent' || !['1','2'].includes(world.generator?.version)) throw new Error('Unsupported world generator');
+      if(world.generator?.name!=='continent' || !['1','2','3','4'].includes(world.generator?.version)) throw new Error('Unsupported world generator');
       validateContinentSettings(world.settings);
+      if(world.terrainHeightmap!=null) {
+        const h=world.terrainHeightmap;
+        if(h.version!==1||h.seaLevel!==20||!Number.isInteger(h.nx)||!Number.isInteger(h.ny)||h.nx<1||h.ny<1||h.nx*h.ny>140000||!Array.isArray(h.values)||h.values.length!==h.nx*h.ny||h.values.some(v=>!Number.isInteger(v)||v<0||v>100))throw new Error('Invalid terrain heightmap');
+      }
       if(typeof world.seed!=='string' || !world.seed.trim() || world.seed.length>200) throw new Error('Invalid continent seed');
       if(!Object.values(world.geography || {}).some(item=>item?.type==='coastline')) throw new Error('Missing continent coastline');
     } else if (world.generator?.name !== 'realm-contours' || world.generator?.version !== 'gentle-inlets-5') throw new Error('Unsupported world generator');
@@ -100,6 +105,7 @@ function validateLayers(atlas) {
     }
     if(world.biomeDeletions!=null&&(!Array.isArray(world.biomeDeletions)||world.biomeDeletions.length>20000||world.biomeDeletions.some(id=>typeof id!=='string')))throw new Error('Invalid deleted biome IDs');
     if(world.showTerritories!=null&&typeof world.showTerritories!=='boolean')throw new Error('Invalid territory visibility');
+    for(const key of ['showBiomes','showPhysical'])if(world[key]!=null&&typeof world[key]!=='boolean')throw new Error('Invalid layer visibility');
     if(world.fields) {
       const f=world.fields,n=f.nx*f.ny;
       if(f.version!==1||typeof f.seed!=='string'||!Number.isInteger(f.nx)||!Number.isInteger(f.ny)||f.nx<2||f.ny<2||n>12000||!Number.isFinite(f.step)||f.step<=0||!Number.isFinite(f.x)||!Number.isFinite(f.y)) throw new Error('Invalid geography grid');
@@ -145,6 +151,7 @@ export function validateAtlas(input) {
   const atlas = structuredClone(input);
   validateLegacyStructure(atlas);
   requireRecord(atlas.sessions, 'sessions');
+  validateSessionRecords(atlas.sessions);
   for (const [id, board] of Object.entries(atlas.boards)) {
     if (board.id !== id || new Set(board.placeIds).size !== board.placeIds.length) throw new Error('Invalid board identity');
     if (board.parentPlaceId != null && atlas.places[board.parentPlaceId]?.childBoardId !== id) throw new Error('Invalid parent reference');
